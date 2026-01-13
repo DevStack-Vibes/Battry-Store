@@ -7,3 +7,4 @@ reportlab
 qrcode
 Pillow
 python-barcode
+gunicorn
