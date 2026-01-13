@@ -1,0 +1,9 @@
+Flask==2.3.3
+Flask-SQLAlchemy
+Flask-Login
+Flask-WTF
+WTForms
+reportlab
+qrcode
+Pillow
+python-barcode

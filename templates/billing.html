@@ -1,0 +1,453 @@
+{% extends "base.html" %}
+{% block title %}Billing{% endblock %}
+{% block extra_js %}
+<script>
+let cartItems = [];
+let scrapItems = [];
+
+$(document).ready(function() {
+    $('#barcode_input').focus();
+    
+    $('#barcode_input').on('keypress', function(e) {
+        if(e.which === 13) {
+            e.preventDefault();
+            searchBarcode($(this).val());
+            $(this).val('');
+        }
+    });
+    
+    $('#searchBtn').on('click', function() {
+        searchBarcode($('#barcode_input').val());
+        $('#barcode_input').val('').focus();
+    });
+    
+    $('#addScrapBtn').on('click', function() {
+        $('#scrapSection').show();
+    });
+    
+    $('#cancelScrapBtn').on('click', function() {
+        $('#scrapSection').hide();
+        clearScrapForm();
+    });
+});
+
+function searchBarcode(query) {
+    if(!query) return;
+    
+    $.get('/search_battery?q=' + query, function(batteries) {
+        if(batteries.length > 0) {
+            const exactMatch = batteries.find(b => b.barcode === query);
+            if(exactMatch) {
+                addToCart(exactMatch.barcode);
+            } else {
+                $('#searchResults').empty();
+                batteries.forEach(function(battery) {
+                    $('#searchResults').append(`
+                        <div class="list-group-item list-group-item-action" onclick="addToCart('${battery.barcode}')">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">${battery.name}</h6>
+                                <small>Rs. ${battery.selling_price}</small>
+                            </div>
+                            <p class="mb-1">${battery.model || ''} | ${battery.company || ''}</p>
+                            <small>Barcode: ${battery.barcode} | Stock: ${battery.quantity}</small>
+                        </div>
+                    `);
+                });
+            }
+        } else {
+            $('#searchResults').html('<div class="text-muted p-2">No batteries found</div>');
+        }
+    });
+}
+
+function addToCart(barcode) {
+    $.get('/get_battery_info/' + barcode, function(response) {
+        if(response.success) {
+            const battery = response.data;
+            
+            if(battery.quantity <= 0) {
+                alert('This item is out of stock!');
+                return;
+            }
+            
+            const existingItem = cartItems.find(item => item.barcode === barcode);
+            
+            if(existingItem) {
+                if(existingItem.quantity >= battery.quantity) {
+                    alert('Cannot add more than available stock!');
+                    return;
+                }
+                existingItem.quantity += 1;
+                existingItem.total = existingItem.quantity * existingItem.price;
+            } else {
+                cartItems.push({
+                    barcode: barcode,
+                    name: battery.name,
+                    model: battery.model,
+                    price: battery.selling_price,
+                    quantity: 1,
+                    total: battery.selling_price
+                });
+            }
+            
+            updateCart();
+            $('#searchResults').empty();
+            $('#barcode_input').focus();
+        } else {
+            alert('Battery not found in inventory!');
+        }
+    });
+}
+
+function updateCart() {
+    let subtotal = 0;
+    let html = '';
+    
+    cartItems.forEach((item, index) => {
+        subtotal += item.total;
+        html += `
+            <tr>
+                <td>${item.barcode}</td>
+                <td>${item.name}</td>
+                <td>${item.model || '-'}</td>
+                <td>
+                    <input type="number" class="form-control form-control-sm" 
+                           value="${item.quantity}" min="1" 
+                           onchange="updateQuantity(${index}, this.value)" style="width: 70px;">
+                </td>
+                <td>Rs. ${item.price.toFixed(2)}</td>
+                <td>Rs. ${item.total.toFixed(2)}</td>
+                <td>
+                    <button class="btn btn-sm btn-danger" onclick="removeItem(${index})">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+    });
+    
+    $('#cartItems').html(html);
+    $('#subtotal').text(subtotal.toFixed(2));
+    calculateTotal();
+}
+
+function updateQuantity(index, quantity) {
+    quantity = parseInt(quantity);
+    if(quantity > 0) {
+        const barcode = cartItems[index].barcode;
+        $.get('/get_battery_info/' + barcode, function(response) {
+            if(response.success && quantity > response.data.quantity) {
+                alert('Cannot add more than available stock! Available: ' + response.data.quantity);
+                return;
+            }
+            cartItems[index].quantity = quantity;
+            cartItems[index].total = quantity * cartItems[index].price;
+            updateCart();
+        });
+    }
+}
+
+function removeItem(index) {
+    cartItems.splice(index, 1);
+    updateCart();
+}
+
+function addScrapItem() {
+    const scrapName = $('#scrap_name').val();
+    const scrapPrice = parseFloat($('#scrap_price').val()) || 0;
+    
+    if(scrapName && scrapPrice > 0) {
+        scrapItems.push({
+            name: scrapName,
+            model: $('#scrap_model').val(),
+            barcode: $('#scrap_barcode').val(),
+            weight: $('#scrap_weight').val(),
+            price: scrapPrice,
+            reason: $('#scrap_reason').val()
+        });
+        
+        updateScrapList();
+        calculateTotal();
+        clearScrapForm();
+    } else {
+        alert('Please enter scrap item name and price!');
+    }
+}
+
+function updateScrapList() {
+    let html = '';
+    let totalScrap = 0;
+    
+    scrapItems.forEach((item, index) => {
+        totalScrap += item.price;
+        html += `
+            <div class="d-flex justify-content-between align-items-center mb-2 border-bottom pb-2">
+                <div>
+                    <strong>${item.name}</strong><br>
+                    <small>Model: ${item.model || '-'} | Barcode: ${item.barcode || '-'} | Reason: ${item.reason || '-'}</small>
+                </div>
+                <div>
+                    <span class="text-danger">-Rs. ${item.price.toFixed(2)}</span>
+                    <button class="btn btn-sm btn-outline-danger ms-2" onclick="removeScrapItem(${index})">
+                        <i class="bi bi-x"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+    
+    $('#scrapItemsList').html(html);
+    $('#scrap_total').text(totalScrap.toFixed(2));
+    $('#scrap_deduction').val(totalScrap.toFixed(2));
+}
+
+function removeScrapItem(index) {
+    scrapItems.splice(index, 1);
+    updateScrapList();
+    calculateTotal();
+}
+
+function clearScrapForm() {
+    $('#scrap_name').val('');
+    $('#scrap_model').val('');
+    $('#scrap_barcode').val('');
+    $('#scrap_weight').val('');
+    $('#scrap_price').val('');
+    $('#scrap_reason').val('Defective');
+}
+
+function calculateTotal() {
+    let subtotal = parseFloat($('#subtotal').text()) || 0;
+    let discount = parseFloat($('#discount').val()) || 0;
+    let scrapDeduction = scrapItems.reduce((sum, item) => sum + item.price, 0);
+    let total = subtotal - discount - scrapDeduction;
+    
+    if(total < 0) total = 0;
+    
+    $('#total_amount').text(total.toFixed(2));
+    $('#scrap_deduction_display').text(scrapDeduction.toFixed(2));
+}
+
+function processBill() {
+    if(cartItems.length === 0) {
+        alert('Please add at least one item to the cart!');
+        return;
+    }
+    
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '{{ url_for("billing") }}';
+    
+    const itemsInput = document.createElement('input');
+    itemsInput.type = 'hidden';
+    itemsInput.name = 'items';
+    itemsInput.value = JSON.stringify(cartItems);
+    form.appendChild(itemsInput);
+    
+    const scrapInput = document.createElement('input');
+    scrapInput.type = 'hidden';
+    scrapInput.name = 'scrap_items';
+    scrapInput.value = JSON.stringify(scrapItems);
+    form.appendChild(scrapInput);
+    
+    const customerName = document.createElement('input');
+    customerName.type = 'hidden';
+    customerName.name = 'customer_name';
+    customerName.value = $('#customer_name').val();
+    form.appendChild(customerName);
+    
+    const customerPhone = document.createElement('input');
+    customerPhone.type = 'hidden';
+    customerPhone.name = 'customer_phone';
+    customerPhone.value = $('#customer_phone').val();
+    form.appendChild(customerPhone);
+    
+    const discount = document.createElement('input');
+    discount.type = 'hidden';
+    discount.name = 'discount';
+    discount.value = $('#discount').val();
+    form.appendChild(discount);
+    
+    const scrapDeduction = document.createElement('input');
+    scrapDeduction.type = 'hidden';
+    scrapDeduction.name = 'scrap_deduction';
+    scrapDeduction.value = scrapItems.reduce((sum, item) => sum + item.price, 0);
+    form.appendChild(scrapDeduction);
+    
+    const paymentMethod = document.createElement('input');
+    paymentMethod.type = 'hidden';
+    paymentMethod.name = 'payment_method';
+    paymentMethod.value = $('#payment_method').val();
+    form.appendChild(paymentMethod);
+    
+    document.body.appendChild(form);
+    form.submit();
+}
+
+$(document).ready(function() {
+    $('#discount').on('input', calculateTotal);
+    $('#scrapSection').hide();
+});
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2"><i class="bi bi-receipt"></i> Billing System</h1>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card mb-3">
+            <div class="card-header"><h5><i class="bi bi-upc-scan"></i> Add Items</h5></div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-8">
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="barcode_input" placeholder="Scan barcode or enter manually">
+                            <button class="btn btn-primary" type="button" id="searchBtn"><i class="bi bi-search"></i> Search</button>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <button class="btn btn-warning w-100" type="button" id="addScrapBtn">
+                            <i class="bi bi-trash"></i> Add Scrap Item
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="searchResults" class="border rounded p-2 mb-3" style="max-height: 200px; overflow-y: auto;"></div>
+                
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Barcode</th>
+                                <th>Name</th>
+                                <th>Model</th>
+                                <th>Qty</th>
+                                <th>Price</th>
+                                <th>Total</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cartItems"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Scrap Items Section -->
+        <div class="card mb-3" id="scrapSection" style="display: none;">
+            <div class="card-header bg-warning text-dark">
+                <h5><i class="bi bi-trash"></i> Add Scrap Item</h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <input type="text" class="form-control" id="scrap_barcode" placeholder="Barcode (Optional)">
+                    </div>
+                    <div class="col-md-3">
+                        <input type="text" class="form-control" id="scrap_name" placeholder="Item Name *" required>
+                    </div>
+                    <div class="col-md-2">
+                        <input type="text" class="form-control" id="scrap_model" placeholder="Model">
+                    </div>
+                    <div class="col-md-2">
+                        <input type="text" class="form-control" id="scrap_weight" placeholder="Weight">
+                    </div>
+                    <div class="col-md-2">
+                        <input type="number" class="form-control" id="scrap_price" placeholder="Price *" step="0.01" required>
+                    </div>
+                </div>
+                <div class="row mb-3">
+                    <div class="col-md-10">
+                        <select class="form-control" id="scrap_reason">
+                            <option value="Defective">Defective</option>
+                            <option value="Damaged">Damaged</option>
+                            <option value="Expired">Expired</option>
+                            <option value="Returned">Customer Return</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-success w-100" onclick="addScrapItem()">
+                            <i class="bi bi-plus"></i> Add
+                        </button>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="border rounded p-2" style="max-height: 150px; overflow-y: auto;" id="scrapItemsList">
+                        <!-- Scrap items will appear here -->
+                    </div>
+                </div>
+                <div class="text-end">
+                    <button class="btn btn-secondary" id="cancelScrapBtn">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header bg-success text-white"><h5><i class="bi bi-calculator"></i> Billing Summary</h5></div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Customer Name</label>
+                    <input type="text" class="form-control" id="customer_name" value="Walk-in Customer">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Phone Number</label>
+                    <input type="text" class="form-control" id="customer_phone">
+                </div>
+                
+                <hr>
+                
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between">
+                        <span>Subtotal:</span>
+                        <strong>Rs. <span id="subtotal">0.00</span></strong>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Discount (Rs.)</label>
+                    <input type="number" class="form-control" id="discount" value="0" step="0.01">
+                </div>
+                
+                <div class="mb-3" id="scrapDeductionSection">
+                    <div class="d-flex justify-content-between">
+                        <span>Scrap Deduction:</span>
+                        <span class="text-danger">Rs. <span id="scrap_deduction_display">0.00</span></span>
+                    </div>
+                </div>
+                
+                <hr>
+                
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between">
+                        <h5>Total Amount:</h5>
+                        <h3 class="text-success">Rs. <span id="total_amount">0.00</span></h3>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Payment Method</label>
+                    <select class="form-select" id="payment_method">
+                        <option value="cash">Cash</option>
+                        <option value="card">Card</option>
+                        <option value="bank_transfer">Bank Transfer</option>
+                    </select>
+                </div>
+                
+                <button class="btn btn-success btn-lg w-100 mb-3" onclick="processBill()">
+                    <i class="bi bi-check-circle"></i> Process Bill
+                </button>
+                
+                <div class="text-center">
+                    <small class="text-muted">Scrap items will be deducted from total and added to scrap inventory</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

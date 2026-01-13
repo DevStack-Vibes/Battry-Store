@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2"><i class="bi bi-speedometer2"></i> Dashboard</h1>
+    <div class="btn-toolbar mb-2 mb-md-0">
+        <span class="badge bg-primary">{{ current_user.username }} ({{ current_user.role }})</span>
+    </div>
+</div>
+
+<!-- All-time Statistics -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card bg-info text-white">
+            <div class="card-body text-center">
+                <i class="bi bi-battery-charging"></i>
+                <h5>Total Batteries</h5>
+                <h2>{{ total_batteries }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card bg-primary text-white">
+            <div class="card-body text-center">
+                <i class="bi bi-cart-check"></i>
+                <h5>Total Sales (All-time)</h5>
+                <h2>{{ total_sales_all }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card bg-success text-white">
+            <div class="card-body text-center">
+                <i class="bi bi-currency-rupee"></i>
+                <h5>Total Revenue (All-time)</h5>
+                <h2>Rs. {{ "%.2f"|format(total_revenue_all) }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card bg-danger text-white">
+            <div class="card-body text-center">
+                <i class="bi bi-exclamation-triangle"></i>
+                <h5>Low Stock Items</h5>
+                <h2>{{ low_stock }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Today's Statistics -->
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card stat-card bg-warning text-dark">
+            <div class="card-body text-center">
+                <i class="bi bi-cart"></i>
+                <h5>Today's Sales</h5>
+                <h2>{{ total_sales_today }}</h2>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card stat-card bg-dark text-white">
+            <div class="card-body text-center">
+                <i class="bi bi-cash"></i>
+                <h5>Today's Revenue</h5>
+                <h2>Rs. {{ "%.2f"|format(today_revenue) }}</h2>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header"><h5><i class="bi bi-lightning"></i> Quick Actions</h5></div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <a href="{{ url_for('add_inventory') }}" class="btn btn-outline-primary w-100 mb-2">
+                            <i class="bi bi-plus-circle"></i> Add New Battery
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{{ url_for('billing') }}" class="btn btn-outline-success w-100 mb-2">
+                            <i class="bi bi-receipt"></i> Create New Bill
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{{ url_for('daily_report') }}" class="btn btn-outline-info w-100 mb-2">
+                            <i class="bi bi-file-text"></i> Daily Report
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="{{ url_for('scrap_inventory') }}" class="btn btn-outline-warning w-100 mb-2">
+                            <i class="bi bi-trash"></i> Scrap Inventory
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Sales -->
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header"><h5><i class="bi bi-clock-history"></i> Recent Sales</h5></div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Invoice</th>
+                                <th>Customer</th>
+                                <th>Date</th>
+                                <th>Amount</th>
+                                <th>Payment</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for sale in recent_sales %}
+                            <tr>
+                                <td>{{ sale.invoice_number }}</td>
+                                <td>{{ sale.customer_name }}</td>
+                                <td>{{ sale.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td>Rs. {{ "%.2f"|format(sale.total) }}</td>
+                                <td><span class="badge bg-info">{{ sale.payment_method }}</span></td>
+                                <td>
+                                    <a href="{{ url_for('invoice', invoice_number=sale.invoice_number) }}" class="btn btn-sm btn-outline-primary">View</a>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr><td colspan="6" class="text-center">No recent sales</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

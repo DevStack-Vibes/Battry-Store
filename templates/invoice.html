@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Invoice{% endblock %}
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1><i class="bi bi-receipt"></i> Invoice</h1>
+        <div>
+            <a href="{{ url_for('print_invoice', invoice_number=sale.invoice_number, size='a4') }}" class="btn btn-primary">
+                <i class="bi bi-printer"></i> Print A4
+            </a>
+            <a href="{{ url_for('print_invoice', invoice_number=sale.invoice_number, size='thermal') }}" class="btn btn-secondary">
+                <i class="bi bi-printer"></i> Print Thermal
+            </a>
+            <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-house"></i> Dashboard
+            </a>
+        </div>
+    </div>
+
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white"><h4 class="mb-0">Invoice Preview</h4></div>
+        <div class="card-body">
+            <div class="text-center mb-4">
+                <h2>Haideri Battery Store</h2>
+                <p class="mb-1">NoorKot Road, Sakhargarh</p>
+                <p class="mb-1">Salesman: Musawar Apal | Phone: 03005016501</p>
+                <hr>
+            </div>
+            
+            <div class="row mb-4">
+                <div class="col-md-6">
+                    <p><strong>Invoice Number:</strong> {{ sale.invoice_number }}</p>
+                    <p><strong>Date:</strong> {{ sale.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>Customer Name:</strong> {{ sale.customer_name }}</p>
+                    <p><strong>Phone:</strong> {{ sale.customer_phone or 'N/A' }}</p>
+                </div>
+            </div>
+            
+            <div class="table-responsive mb-4">
+                <table class="table table-bordered">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>#</th>
+                            <th>Item Description</th>
+                            <th>Qty</th>
+                            <th>Unit Price</th>
+                            <th>Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in items %}
+                        <tr>
+                            <td>{{ loop.index }}</td>
+                            <td><strong>{{ item.name }}</strong><br><small>Barcode: {{ item.barcode }}</small></td>
+                            <td>{{ item.quantity }}</td>
+                            <td>Rs. {{ "%.2f"|format(item.price) }}</td>
+                            <td>Rs. {{ "%.2f"|format(item.total) }}</td>
+                        </tr>
+                        {% endfor %}
+                        
+                        {% if scrap_items %}
+                        <tr class="table-warning">
+                            <td colspan="5"><strong>Scrap Items (Deducted from bill):</strong></td>
+                        </tr>
+                        {% for scrap in scrap_items %}
+                        <tr class="table-warning">
+                            <td>{{ loop.index + items|length }}</td>
+                            <td><strong>{{ scrap.name }}</strong><br><small>Reason: {{ scrap.reason or 'N/A' }}</small></td>
+                            <td>1</td>
+                            <td class="text-danger">-Rs. {{ "%.2f"|format(scrap.price) }}</td>
+                            <td class="text-danger">-Rs. {{ "%.2f"|format(scrap.price) }}</td>
+                        </tr>
+                        {% endfor %}
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="row justify-content-end">
+                <div class="col-md-6">
+                    <table class="table table-bordered">
+                        <tr>
+                            <td><strong>Subtotal:</strong></td>
+                            <td class="text-end">Rs. {{ "%.2f"|format(sale.subtotal) }}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Discount:</strong></td>
+                            <td class="text-end text-danger">- Rs. {{ "%.2f"|format(sale.discount) }}</td>
+                        </tr>
+                        {% if sale.scrap_deduction > 0 %}
+                        <tr>
+                            <td><strong>Scrap Deduction:</strong></td>
+                            <td class="text-end text-danger">- Rs. {{ "%.2f"|format(sale.scrap_deduction) }}</td>
+                        </tr>
+                        {% endif %}
+                        <tr class="table-success">
+                            <td><strong>Grand Total:</strong></td>
+                            <td class="text-end"><h4 class="mb-0">Rs. {{ "%.2f"|format(sale.total) }}</h4></td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+            
+            <div class="mt-4">
+                <p><strong>Payment Method:</strong> {{ sale.payment_method|upper }}</p>
+                <p><strong>Processed By:</strong> {{ sale.created_by }}</p>
+            </div>
+            
+            <div class="text-center mt-5 pt-4 border-top">
+                <p class="mb-1"><strong>Thank you for your business!</strong></p>
+                <p class="text-muted">For any queries, please contact: 03005016501</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
